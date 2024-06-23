@@ -1,9 +1,7 @@
 import os
-import requests
+from crewai import Agent, Task, Crew
+from langchain_community.tools import DuckDuckGoSearchRun
 import openai
-import json
-from datetime import datetime
-from crewai import Agent
 
 # Function to read API keys from config file
 def read_config(file_path):
@@ -16,105 +14,94 @@ def read_config(file_path):
     except Exception as e:
         print(f"Error reading config file: {e}")
 
-# Fetch news articles using newsdata.io API
-def fetch_news(topic):
-    try:
-        api_key = os.getenv("NEWSDATA_API_KEY")
-        url = f"https://newsdata.io/api/1/news?apikey={api_key}&q={topic}"
-        response = requests.get(url)
-        response.raise_for_status()  # Raise an error for bad status codes
-        return response.json()
-    except Exception as e:
-        print(f"Error fetching news: {e}")
-        return None
+# Read the API key from config.txt
+config_file_path = "config.txt"
+read_config(config_file_path)
 
-# Summarize the articles using OpenAI GPT-4
-def summarize_article_with_openai(title, description, url):
-    try:
-        openai_api_key = os.getenv("OPENAI_API_KEY")
-        openai.api_key = openai_api_key
-        prompt = (
-            f"Title: {title}\n"
-            f"Description: {description}\n"
-            f"URL: {url}\n\n"
-            "You are writing a summary for an accountancy firm that provides insights to its clients. "
-            "The clients are small and medium-sized businesses and entrepreneurs interested in financial growth, tax regulations, "
-            "economic changes, and business strategies. Summarize the article, highlighting the key points relevant to these interests and "
-            "how it can impact their financial planning and business growth."
-        )
-        response = openai.ChatCompletion.create(
-            model="gpt-4",  # Specify the GPT-4 model
-            messages=[
-                {"role": "system", "content": "Summarize the following article."},
-                {"role": "user", "content": prompt},
-            ],
-            max_tokens=150,
-            n=1,
-            stop=None,
-            temperature=0.7,
-        )
-        summary = response['choices'][0]['message']['content'].strip()
-        return summary
-    except Exception as e:
-        print(f"Error summarizing article with OpenAI: {e}")
-        return "Summary not available."
+# Ensure the OpenAI API key is set
+openai_api_key = os.getenv("OPENAI_API_KEY")
+if openai_api_key:
+    openai.api_key = openai_api_key
+else:
+    raise ValueError("OpenAI API key is not set. Please check your config.txt file.")
 
-# Write data to a file
-def write_to_file(filename, data):
-    try:
-        with open(filename, 'w') as file:
-            json.dump(data, file, indent=4)
-    except Exception as e:
-        print(f"Error writing to file: {e}")
+# Function to summarize text using GPT-4
+def summarize_with_gpt4(text):
+    response = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": "You are an expert in summarizing and analyzing text."},
+            {"role": "user", "content": text}
+        ],
+        max_tokens=200,
+        temperature=0.7
+    )
+    return response.choices[0].message['content']
 
-# Main logic
-def main():
-    config_file_path = "config.txt"
-    read_config(config_file_path)
+# Define your agents with roles and goals
+search_tool = DuckDuckGoSearchRun()
 
-    topic = "budget uk"
-    api_key = os.getenv("NEWSDATA_API_KEY")
-    if not api_key:
-        print("Error: NEWSDATA_API_KEY is not set")
-        return
+researcher = Agent(
+    role='Senior Research Analyst',
+    goal='Uncover cutting-edge developments in AI and data science',
+    backstory="""You work at a leading tech think tank.
+    Your expertise lies in identifying emerging trends.
+    You have a knack for dissecting complex data and presenting actionable insights.""",
+    verbose=True,
+    allow_delegation=False,
+    tools=[search_tool]
+)
 
-    # Fetch news articles
-    print("Fetching news articles...")
-    research_results = fetch_news(topic)
-    if not research_results:
-        print("No research results fetched.")
-        return
+writer = Agent(
+    role='Tech Content Strategist',
+    goal='Craft compelling content on tech advancements',
+    backstory="""You are a renowned Content Strategist, known for your insightful and engaging articles.
+    You transform complex concepts into compelling narratives.""",
+    verbose=True,
+    allow_delegation=True
+)
 
-    # Get current date and time for filenames
-    now = datetime.now().strftime("%Y%m%d_%H%M%S")
+seo_agent = Agent(
+    role='SEO Specialist',
+    goal='Optimize content for search engines to ensure maximum visibility and engagement',
+    backstory="""You are an expert in SEO with a deep understanding of search engine algorithms and strategies to optimize content for better rankings.""",
+    verbose=True,
+    allow_delegation=True
+)
 
-    # Write raw API output to a file
-    raw_filename = f"newsdata_raw_{now}.json"
-    print(f"Writing raw data to {raw_filename}...")
-    write_to_file(raw_filename, research_results)
+# Create tasks for your agents
+task1 = Task(
+    description="""Conduct a comprehensive analysis of the latest advancements in AI in 2024.
+    Identify key trends, breakthrough technologies, and potential industry impacts.""",
+    expected_output="Full analysis report in bullet points",
+    agent=researcher
+)
 
-    summaries = []
-    print("Processing articles...")
-    for article in research_results.get('results', []):
-        try:
-            title = article.get('title', 'No title')
-            description = article.get('description', 'No description')
-            url = article.get('link', 'No URL')
-            if title and description and url:
-                # Use OpenAI to summarize the article
-                print(f"Summarizing article: {title}")
-                summary = summarize_article_with_openai(title, description, url)
-                summaries.append({"title": title, "summary": summary, "url": url})
-            else:
-                print(f"Missing information for article: {title}")
-        except Exception as e:
-            print(f"Error processing article: {title}, error: {e}")
+task2 = Task(
+    description="""Using the insights provided, develop an engaging blog
+    post that highlights the most significant AI advancements.
+    Your post should be informative yet accessible, catering to a tech-savvy audience.
+    Make it sound cool, avoid complex words so it doesn't sound like AI.""",
+    expected_output="Full blog post of at least 4 paragraphs",
+    agent=writer
+)
 
-    # Write all summaries to a file
-    summary_filename = f"summaries_{now}.json"
-    print(f"Writing summaries to {summary_filename}...")
-    write_to_file(summary_filename, summaries)
-    print("Finished writing summaries.")
+task3 = Task(
+    description="""Optimize the blog post for search engines to ensure it reaches a wider audience.
+    Implement SEO best practices including keyword optimization, meta descriptions, and internal linking.""",
+    expected_output="SEO-optimized blog post",
+    agent=seo_agent
+)
 
-if __name__ == "__main__":
-    main()
+# Instantiate your crew with a sequential process
+crew = Crew(
+    agents=[researcher, writer, seo_agent],
+    tasks=[task1, task2, task3],
+    verbose=2, # You can set it to 1 or 2 to different logging levels
+)
+
+# Kickoff the crew to work
+result = crew.kickoff()
+
+print("-----------------------------")
+print(result)
