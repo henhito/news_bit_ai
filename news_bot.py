@@ -1,5 +1,5 @@
 import os
-from crewai import Agent, Task, Crew
+from crewai import Agent, Task, Crew, Process
 from langchain_community.tools import DuckDuckGoSearchRun
 import openai
 
@@ -38,70 +38,92 @@ def summarize_with_gpt4(text):
     )
     return response.choices[0].message['content']
 
-# Define your agents with roles and goals
-search_tool = DuckDuckGoSearchRun()
+# Define the search tool
+search = DuckDuckGoSearchRun()
 
+# Define the agents
 researcher = Agent(
-    role='Senior Research Analyst',
-    goal='Uncover cutting-edge developments in AI and data science',
-    backstory="""You work at a leading tech think tank.
-    Your expertise lies in identifying emerging trends.
-    You have a knack for dissecting complex data and presenting actionable insights.""",
+    role="Senior Research Analyst",
+    goal="""Uncover the latest trends and developments in the accounting and business sectors relevant to small businesses,
+            with a focus on financial understanding, clarity, and overcoming growth challenges and how Bean Sprout could
+            help ambitious business owners to grow their business using our Numbers, Narrative, and Nurture approach.""",
     verbose=True,
+    tools=[search],
     allow_delegation=False,
-    tools=[search_tool]
+    backstory="""You work at Bean Sprout, a consultancy firm for small businesses. Your expertise lies in identifying emerging
+                trends and providing actionable insights to help small businesses thrive in a competitive market. You emphasize
+                Bean Sprout’s commitment to exceptional financial business coaching and personalized solutions."""
 )
 
 writer = Agent(
-    role='Tech Content Strategist',
-    goal='Craft compelling content on tech advancements',
-    backstory="""You are a renowned Content Strategist, known for your insightful and engaging articles.
-    You transform complex concepts into compelling narratives.""",
+    role="Tech Content Strategist",
+    goal="Craft compelling and informative content that showcases the latest tech advancements and business strategies beneficial to small businesses, while reflecting Bean Sprout’s core values of clarity, confidence, and overcoming challenges.",
     verbose=True,
-    allow_delegation=True
+    allow_delegation=True,
+    backstory="""As a renowned Content Strategist at Bean Sprout, you are known for your insightful and engaging articles. You excel in transforming complex concepts into compelling narratives that resonate with small business owners, ensuring the content aligns with Bean Sprout’s values and mission."""
 )
 
 seo_agent = Agent(
-    role='SEO Specialist',
-    goal='Optimize content for search engines to ensure maximum visibility and engagement',
-    backstory="""You are an expert in SEO with a deep understanding of search engine algorithms and strategies to optimize content for better rankings.""",
+    role="SEO Specialist",
+    goal="Optimize content for search engines to ensure maximum visibility and engagement, highlighting Bean Sprout’s unique value proposition.",
     verbose=True,
-    allow_delegation=True
+    allow_delegation=True,
+    backstory="""You are an expert in SEO at Bean Sprout with a deep understanding of search engine algorithms and strategies to optimize content for better rankings. You focus on ensuring that the content reaches a wider audience, driving more traffic to Bean Sprout’s website while emphasizing their mission and values."""
 )
 
-# Create tasks for your agents
-task1 = Task(
-    description="""Conduct a comprehensive analysis of the latest advancements in AI in 2024.
-    Identify key trends, breakthrough technologies, and potential industry impacts.""",
+editor = Agent(
+    role="Content Editor",
+    goal="Ensure the content is polished, coherent, and aligns with Bean Sprout’s brand voice, core values, and mission.",
+    verbose=True,
+    allow_delegation=False,
+    backstory="""You are a skilled editor at Bean Sprout, dedicated to maintaining the quality and consistency of all published content. You have a keen eye for detail and a strong understanding of the company’s brand voice, ensuring that every piece of content reflects Bean Sprout’s commitment to exceptional financial coaching and personalized business solutions."""
+)
+
+# Define the tasks
+research_task = Task(
+    description="Conduct a comprehensive analysis of the latest trends and developments in the UK business sectors relevant to small businesses.",
+    agent=researcher,
     expected_output="Full analysis report in bullet points",
-    agent=researcher
 )
 
-task2 = Task(
-    description="""Using the insights provided, develop an engaging blog
-    post that highlights the most significant AI advancements.
-    Your post should be informative yet accessible, catering to a tech-savvy audience.
-    Make it sound cool, avoid complex words so it doesn't sound like AI.""",
+writing_task = Task(
+    description="Using the insights provided, develop an engaging blog post that highlights the most significant trends and strategies beneficial to small businesses.",
+    agent=writer,
     expected_output="Full blog post of at least 4 paragraphs",
-    agent=writer
 )
 
-task3 = Task(
-    description="""Optimize the blog post for search engines to ensure it reaches a wider audience.
-    Implement SEO best practices including keyword optimization, meta descriptions, and internal linking.""",
+seo_task = Task(
+    description="Optimize the blog post for search engines to ensure it reaches a wider audience. Implement SEO best practices including keyword optimization, meta descriptions, and internal linking.",
+    agent=seo_agent,
     expected_output="SEO-optimized blog post",
-    agent=seo_agent
 )
 
-# Instantiate your crew with a sequential process
+editing_task = Task(
+    description="Review the blog post to ensure it is polished, coherent, and aligns with Bean Sprout’s brand voice. Make necessary edits and adjustments.",
+    agent=editor,
+    expected_output="Final edited blog post ready for publication",
+)
+
+# Instantiate the crew with a sequential process
 crew = Crew(
-    agents=[researcher, writer, seo_agent],
-    tasks=[task1, task2, task3],
-    verbose=2, # You can set it to 1 or 2 to different logging levels
+    agents=[researcher, writer, seo_agent, editor],
+    tasks=[research_task, writing_task, seo_task, editing_task],
+    verbose=True,
+    process=Process.sequential,
 )
 
-# Kickoff the crew to work
+# Execute the tasks
 result = crew.kickoff()
 
 print("-----------------------------")
 print(result)
+
+# Summarize the results
+#if isinstance(result, list):
+#    for res in result:
+#        if 'content' in res:
+#            summarized_result = summarize_with_gpt4(res['content'])
+#            print(summarized_result)
+#else:
+#    summarized_result = summarize_with_gpt4(result)
+#    print(summarized_result)
