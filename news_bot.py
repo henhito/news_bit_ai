@@ -1,7 +1,19 @@
 import os
-from crewai import Agent, Task, Crew, Process
+from crewai import Agent, Task, Crew
 from langchain_community.tools import DuckDuckGoSearchRun
 import openai
+from agent_config import (
+    political_analyst_goal, fact_checker_goal, content_strategist_goal,
+    blog_writer_goal, seo_specialist_goal, editor_goal,
+    political_analyst_backstory, fact_checker_backstory, content_strategist_backstory,
+    blog_writer_backstory, seo_specialist_backstory, editor_backstory,
+    political_analyst_task_description, political_analyst_task_expected_output,
+    fact_checker_task_description, fact_checker_task_expected_output,
+    content_strategist_task_description, content_strategist_task_expected_output,
+    blog_writer_task_description, blog_writer_task_expected_output,
+    seo_specialist_task_description, seo_specialist_task_expected_output,
+    editor_task_description, editor_task_expected_output
+)
 
 # Function to read API keys from config file
 def read_config(file_path):
@@ -25,105 +37,109 @@ if openai_api_key:
 else:
     raise ValueError("OpenAI API key is not set. Please check your config.txt file.")
 
-# Function to summarize text using GPT-4
-def summarize_with_gpt4(text):
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": "You are an expert in summarizing and analyzing text."},
-            {"role": "user", "content": text}
-        ],
-        max_tokens=200,
-        temperature=0.7
-    )
-    return response.choices[0].message['content']
+# Define agents for the blog article crew
+search_tool = DuckDuckGoSearchRun()
 
-# Define the search tool
-search = DuckDuckGoSearchRun()
-
-# Define the agents
-researcher = Agent(
-    role="Senior Research Analyst",
-    goal="""Uncover the latest trends and developments in the accounting and business sectors relevant to small businesses,
-            with a focus on financial understanding, clarity, and overcoming growth challenges and how Bean Sprout could
-            help ambitious business owners to grow their business using our Numbers, Narrative, and Nurture approach.""",
+political_analyst = Agent(
+    role='Political Analyst',
+    goal=political_analyst_goal,
+    backstory=political_analyst_backstory,
     verbose=True,
-    tools=[search],
     allow_delegation=False,
-    backstory="""You work at Bean Sprout, a consultancy firm for small businesses. Your expertise lies in identifying emerging
-                trends and providing actionable insights to help small businesses thrive in a competitive market. You emphasize
-                Bean Sprout’s commitment to exceptional financial business coaching and personalized solutions."""
+    tools=[search_tool]
 )
 
-writer = Agent(
-    role="Tech Content Strategist",
-    goal="Craft compelling and informative content that showcases the latest tech advancements and business strategies beneficial to small businesses, while reflecting Bean Sprout’s core values of clarity, confidence, and overcoming challenges.",
+fact_checker = Agent(
+    role='Fact Checker',
+    goal=fact_checker_goal,
+    backstory=fact_checker_backstory,
     verbose=True,
-    allow_delegation=True,
-    backstory="""As a renowned Content Strategist at Bean Sprout, you are known for your insightful and engaging articles. You excel in transforming complex concepts into compelling narratives that resonate with small business owners, ensuring the content aligns with Bean Sprout’s values and mission."""
+    allow_delegation=False
 )
 
-seo_agent = Agent(
-    role="SEO Specialist",
-    goal="Optimize content for search engines to ensure maximum visibility and engagement, highlighting Bean Sprout’s unique value proposition.",
+content_strategist = Agent(
+    role='Content Strategist',
+    goal=content_strategist_goal,
+    backstory=content_strategist_backstory,
     verbose=True,
-    allow_delegation=True,
-    backstory="""You are an expert in SEO at Bean Sprout with a deep understanding of search engine algorithms and strategies to optimize content for better rankings. You focus on ensuring that the content reaches a wider audience, driving more traffic to Bean Sprout’s website while emphasizing their mission and values."""
+    allow_delegation=True
+)
+
+blog_writer = Agent(
+    role='Blog Writer',
+    goal=blog_writer_goal,
+    backstory=blog_writer_backstory,
+    verbose=True,
+    allow_delegation=True
+)
+
+seo_specialist = Agent(
+    role='SEO Specialist',
+    goal=seo_specialist_goal,
+    backstory=seo_specialist_backstory,
+    verbose=True,
+    allow_delegation=True
 )
 
 editor = Agent(
-    role="Content Editor",
-    goal="Ensure the content is polished, coherent, and aligns with Bean Sprout’s brand voice, core values, and mission.",
+    role='Editor',
+    goal=editor_goal,
+    backstory=editor_backstory,
     verbose=True,
-    allow_delegation=False,
-    backstory="""You are a skilled editor at Bean Sprout, dedicated to maintaining the quality and consistency of all published content. You have a keen eye for detail and a strong understanding of the company’s brand voice, ensuring that every piece of content reflects Bean Sprout’s commitment to exceptional financial coaching and personalized business solutions."""
+    allow_delegation=False
 )
 
-# Define the tasks
-research_task = Task(
-    description="Conduct a comprehensive analysis of the latest trends and developments in the UK business sectors relevant to small businesses.",
-    agent=researcher,
-    expected_output="Full analysis report in bullet points",
+# Define tasks for the blog article crew
+task1 = Task(
+    description=political_analyst_task_description,
+    expected_output=political_analyst_task_expected_output,
+    agent=political_analyst
 )
 
-writing_task = Task(
-    description="Using the insights provided, develop an engaging blog post that highlights the most significant trends and strategies beneficial to small businesses.",
-    agent=writer,
-    expected_output="Full blog post of at least 4 paragraphs",
+task2 = Task(
+    description=fact_checker_task_description,
+    expected_output=fact_checker_task_expected_output,
+    agent=fact_checker
 )
 
-seo_task = Task(
-    description="Optimize the blog post for search engines to ensure it reaches a wider audience. Implement SEO best practices including keyword optimization, meta descriptions, and internal linking.",
-    agent=seo_agent,
-    expected_output="SEO-optimized blog post",
+task3 = Task(
+    description=content_strategist_task_description,
+    expected_output=content_strategist_task_expected_output,
+    agent=content_strategist
 )
 
-editing_task = Task(
-    description="Review the blog post to ensure it is polished, coherent, and aligns with Bean Sprout’s brand voice. Make necessary edits and adjustments.",
-    agent=editor,
-    expected_output="Final edited blog post ready for publication",
+task4 = Task(
+    description=blog_writer_task_description,
+    expected_output=blog_writer_task_expected_output,
+    agent=blog_writer
 )
 
-# Instantiate the crew with a sequential process
-crew = Crew(
-    agents=[researcher, writer, seo_agent, editor],
-    tasks=[research_task, writing_task, seo_task, editing_task],
-    verbose=True,
-    process=Process.sequential,
+task5 = Task(
+    description=seo_specialist_task_description,
+    expected_output=seo_specialist_task_expected_output,
+    agent=seo_specialist
 )
 
-# Execute the tasks
-result = crew.kickoff()
+task6 = Task(
+    description=editor_task_description,
+    expected_output=editor_task_expected_output,
+    agent=editor
+)
 
-print("-----------------------------")
-print(result)
+# Instantiate the blog article crew
+blog_article_crew = Crew(
+    agents=[political_analyst, fact_checker, content_strategist, blog_writer, seo_specialist, editor],
+    tasks=[task1, task2, task3, task4, task5, task6],
+    verbose=2
+)
 
-# Summarize the results
-#if isinstance(result, list):
-#    for res in result:
-#        if 'content' in res:
-#            summarized_result = summarize_with_gpt4(res['content'])
-#            print(summarized_result)
-#else:
-#    summarized_result = summarize_with_gpt4(result)
-#    print(summarized_result)
+# Execute the blog article crew's tasks
+try:
+    result = blog_article_crew.kickoff()
+    print("-----------------------------")
+    print("Blog Article Creation Phase Completed")
+    print(result)
+except openai.error.OpenAIError as e:
+    print(f"OpenAI API error: {e}")
+except Exception as e:
+    print(f"An error occurred: {e}")
